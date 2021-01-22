@@ -146,9 +146,12 @@ public:
 		return has_inter;
 	}
 
-	Vector get_color(const Ray& r, int rebond){
-
+	Vector get_color(const Ray& r, int rebond)
+	{
+	// renvoie la couleur du pixel
 		if (rebond > 5) return Vector(0.,0.,0.);
+		// on limite le nombre de rebond à 5 pour éviter que
+		// le rayon soit réfléchi à l'infini entre 2 sphères
 
 		Vector P, N, albedo;
 		double t;
@@ -158,24 +161,32 @@ public:
 		
 		if (inter) 
 		{
-			if (mirror) {
+			if (mirror) 
+			{
 				Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
 				Ray reflectedRay(P + 0.001*N, reflectedDir);
 				return get_color(reflectedRay, rebond + 1);
 			} 
-			else {
-				if (transparent) {
+			else 
+			{
+				if (transparent) 
+				{
 					Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
 					Ray reflectedRay(P + 0.001*N, reflectedDir);
 					double n1 = 1, n2 = 1.4;
 					Vector N2 = N;
-					if (dot(r.u, N) > 0) {
+					if (dot(r.u, N) > 0) 
+					// si la normale ne pointe pas vers l'origine du rayon
+					// on inverse les indices des milieux et on change la normale de direction
+					{
 						std::swap(n1, n2);
 						N2 = -N;
 					}
 					Vector Tt = n1 / n2 * (r.u - dot(r.u, N2)*N2);
 					double rad = 1 - carre(n1/n2) * (1 - carre(dot(r.u, N2)));
-					if (rad < 0) {
+					if (rad < 0) 
+					// Si le terme sous la racine est négatif, le rayon est réfléchi
+					{
 						Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
 						Ray reflectedRay(P + 0.001*N, reflectedDir);
 						return get_color(reflectedRay, rebond + 1);
@@ -184,7 +195,9 @@ public:
 					Vector refractedDir = Tt + Tn;
 					return get_color(Ray(P - 0.001*N2, refractedDir), rebond + 1);	
 				}
-				else {
+				else
+				// la sphère est diffuse 
+				{
 					Vector PL = L-P;
 					double d = sqrt(PL.carreNorm());    
 					// distance entre le point d'intersection et la lumière
@@ -198,8 +211,7 @@ public:
 					} else {
 						color = I / (4*M_PI*d*d) * albedo/M_PI *std::max(0., dot(N, PL/d));
 					}
-				}
-				
+				}	
 			}
 			return color;
 		}
