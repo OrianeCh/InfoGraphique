@@ -352,8 +352,20 @@ int main() {
 			Ray r(C, u);
 
 			Vector color(0., 0., 0.);
-			for (int k= 0; k<nbrays; k++)
+			for (int k= 0; k<nbrays; k++) {
+				
+				double u1 = uniform(engine);
+				double u2 = uniform(engine);
+				double x1 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
+				double x2 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
+
+				Vector u(j - W/2 + x2 + 0.5, i - H/2 + x1 + 0.5, - W / (2.*tan(fov/2)));    
+				// direction du rayon sortant par le pixel i,j de la caméra
+				u = u.get_normalized();
+				Ray r(C, u);
+
 				color += scene.get_color(r, 0);
+			}
 			color = color / nbrays;
 			
 
