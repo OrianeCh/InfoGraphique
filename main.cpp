@@ -30,6 +30,12 @@ public :
 	{
 		return coords[0]*coords[0] + coords[1]*coords[1] + coords[2]*coords[2];
 	}
+	Vector operator+=(const Vector& a) {
+		coords[0] += a[0];
+		coords[1] += a[1];
+		coords[2] += a[2];
+		return *this;
+	}
 	Vector get_normalized()     // renvoie le vecteur normalisé
 	{
 		double n = sqrt(carreNorm());
@@ -49,6 +55,10 @@ Vector operator*(double a, const Vector& b)
 Vector operator*(const Vector& a, double b)
 {
 	return Vector(b*a[0], b*a[1], b*a[2]);
+}
+Vector operator*(const Vector& a, const Vector& b)
+{
+	return Vector(b[0]*a[0], b[1]*a[1], b[2]*a[2]);
 }
 Vector operator/(const Vector& a, double b)
 {
@@ -70,11 +80,34 @@ double dot(const Vector& a, const Vector& b)
 {
 	return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 }
+Vector cross(const Vector& a, const Vector& b)
+{
+	return Vector(a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]);
+}
 double carre(double x) 
 {
 	return x * x;
 }
-
+Vector random_cos(const Vector& N) {
+	double u1 = uniform(engine);
+	double u2 = uniform(engine);
+	double x = cos(2*M_PI*u1)*sqrt(1-u2);
+	double y = sin(2*M_PI*u1)*sqrt(1-u2);
+	double z = sqrt(u2);
+	Vector T1;
+	if (N[0] < N[1] && N[0] < N[2]) {
+		T1 = Vector(0, N[2], -N[1]);
+	} else {
+		if (N[1] < N[0] && N[1] < N[2]) {
+			T1 = Vector(N[2], 0, -N[0]);
+		} else {
+			T1 = Vector(N[1], -N[0], 0);
+		}
+	}
+	T1 = T1.get_normalized();
+	Vector T2 = cross(N, T1);
+	return z*N + x*T1 + y*T2;
+}
 
 class Ray {
 public:
@@ -203,6 +236,7 @@ public:
 				}
 				else
 				// la sphère est diffuse 
+				// éclairage direct
 				{
 					Vector PL = L-P;
 					double d = sqrt(PL.carreNorm());    
@@ -217,6 +251,12 @@ public:
 					} else {
 						color = I / (4*M_PI*d*d) * albedo/M_PI *std::max(0., dot(N, PL/d));
 					}
+
+					// éclairage indirect
+					Vector omega_i = random_cos(N);
+					Ray omega_iRay(P + 0.001*N, omega_i);
+					color += albedo*get_color(omega_iRay, rebond + 1);
+
 				}	
 			}
 			return color;
@@ -272,12 +312,12 @@ int main() {
 	int W = 512;
 	int H = 512;
 
-	integrateCos();
-	return 0;
+	/*integrateCos();
+	return 0;*/
 
 	Vector C(0, 0, 55);    // centre de la caméra
 	Scene scene;
-	Sphere S1(Vector(0, 0, 0), 10, Vector(1, 1, 1), false, true);
+	Sphere S1(Vector(0, 0, 0), 10, Vector(1, 1, 1));
 	Sphere Ssol(Vector(0, -1000, 0), 990, Vector(1, 1, 1));
 	Sphere Smur1(Vector(-1000, 0, 0), 940, Vector(1, 0., 0.));
 	Sphere Smur2(Vector(1000, 0, 0), 940, Vector(0., 1, 0.));
@@ -296,8 +336,10 @@ int main() {
 	scene.I = 5E9;    // Intensité de la source lumineuse
 
 	scene.L = Vector(-10, 20, 40);    // Position de la source lumineuse
+	int nbrays = 10;
 
 	std::vector<unsigned char> image(W*H * 3, 0);
+#pragma omp parallel for schedule(dynamic, 1)
 	// tableau dynamique que l'on remplit au fur et à mesure de la boucle
 	// avec la couleur des pixels
 	for (int i = 0; i < H; i++) 
@@ -309,7 +351,11 @@ int main() {
 			u = u.get_normalized();
 			Ray r(C, u);
 
-			Vector color = scene.get_color(r, 0);
+			Vector color(0., 0., 0.);
+			for (int k= 0; k<nbrays; k++)
+				color += scene.get_color(r, 0);
+			color = color / nbrays;
+			
 
 			image[((H-i-1)*W + j) * 3 + 0] = std::min(255., pow(color[0], 0.45));
 			image[((H-i-1)*W + j) * 3 + 1] = std::min(255., pow(color[1], 0.45));
