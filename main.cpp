@@ -30,7 +30,8 @@ public :
 	{
 		return coords[0]*coords[0] + coords[1]*coords[1] + coords[2]*coords[2];
 	}
-	Vector operator+=(const Vector& a) {
+	Vector operator+=(const Vector& a) 
+	{
 		coords[0] += a[0];
 		coords[1] += a[1];
 		coords[2] += a[2];
@@ -88,14 +89,17 @@ double carre(double x)
 {
 	return x * x;
 }
-Vector random_cos(const Vector& N) {
+Vector random_cos(const Vector& N)
+// Permet de générer un vecteur aléatoire pour la méthode de Monte Carlo
+{
 	double u1 = uniform(engine);
 	double u2 = uniform(engine);
 	double x = cos(2*M_PI*u1)*sqrt(1-u2);
 	double y = sin(2*M_PI*u1)*sqrt(1-u2);
 	double z = sqrt(u2);
 	Vector T1;
-	if (N[0] < N[1] && N[0] < N[2]) {
+	if (N[0] < N[1] && N[0] < N[2]) 
+	{
 		T1 = Vector(0, N[2], -N[1]);
 	} else {
 		if (N[1] < N[0] && N[1] < N[2]) {
@@ -268,7 +272,9 @@ public:
 
 };
 
-void integrateCos() {
+void integrateCos() 
+// fonction d'entrainement à la méthode de Monte-Carlo, non-utilisée dans le raytracer
+{
     int N = 10000;
     double sigma = 0.25;
     double s = 0;
@@ -284,7 +290,9 @@ void integrateCos() {
     std::cout <<s << std::endl;
 }
 
-void integrateCos4() {
+void integrateCos4() 
+// fonction d'entrainement à la méthode de Monte-Carlo, non-utilisée dans le raytracer
+{
     int N = 1000000;
     double sigma = 1;
     double s = 0;
@@ -339,9 +347,11 @@ int main() {
 	int nbrays = 10;
 
 	std::vector<unsigned char> image(W*H * 3, 0);
-#pragma omp parallel for schedule(dynamic, 1)
 	// tableau dynamique que l'on remplit au fur et à mesure de la boucle
 	// avec la couleur des pixels
+
+#pragma omp parallel for schedule(dynamic, 1)
+	// parallélisation pour gagner du temps
 	for (int i = 0; i < H; i++) 
 	{
 		for (int j = 0; j < W; j++) 
