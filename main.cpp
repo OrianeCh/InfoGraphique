@@ -155,7 +155,6 @@ public:
 	};
 	Vector albedo;
 	bool isMirror, isTransparent;
-private :
 	Vector O;
 	double R;
 };
@@ -163,7 +162,7 @@ private :
 class Scene {
 public:
 	Scene() {};
-	bool intersect(const Ray& r, Vector& P, Vector& N, Vector& albedo, bool &mirror, bool &transparent, double &t)
+	bool intersect(const Ray& r, Vector& P, Vector& N, Vector& albedo, bool &mirror, bool &transparent, double &t, int &objectid)
 	// return true si il y a intersection avec au moins une sphere de la scene
 	// donne le point P et la normale N de l'intersection la plus proche de l’origine du rayon 
 	// parmi les intersections avec toutes les sphères de la scène
@@ -184,6 +183,7 @@ public:
 				N = localN;
 				mirror = objects[i].isMirror;
 				transparent = objects[i].isTransparent;
+				objectid = i;
 			}
 		}
 		return has_inter;
@@ -199,11 +199,16 @@ public:
 		Vector P, N, albedo;
 		double t;
 		bool mirror, transparent;
-		bool inter = intersect(r, P, N, albedo, mirror, transparent, t);
+		int objectid;
+		bool inter = intersect(r, P, N, albedo, mirror, transparent, t, objectid);
 		Vector color(0, 0, 0);    // noir 
 		
 		if (inter) 
 		{
+			if (objectid == 0){
+				return Vector(I,I,I) / (4*M_PI*M_PI*objects[0].R*objects[0].R);
+			}
+
 			if (mirror) 
 			{
 				Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
@@ -242,19 +247,20 @@ public:
 				// la sphère est diffuse 
 				// éclairage direct
 				{
-					Vector PL = L-P;
+					/*Vector PL = L-P;
 					double d = sqrt(PL.carreNorm());    
 					// distance entre le point d'intersection et la lumière
 					Vector shadowP, shadowN, shadowAlbedo;
 					double shadowt;
 					bool shadowMirror, shadowTransp;
 					Ray shadowRay(P + 0.001*N, PL/d);
-					bool ombre = intersect(shadowRay, shadowP, shadowN, shadowAlbedo, shadowMirror, shadowTransp, shadowt);
+					int objectsid;
+					bool ombre = intersect(shadowRay, shadowP, shadowN, shadowAlbedo, shadowMirror, shadowTransp, shadowt, objectsid);
 					if (ombre && shadowt < d) {
 						color = Vector(0., 0., 0.);
 					} else {
 						color = I / (4*M_PI*d*d) * albedo/M_PI *std::max(0., dot(N, PL/d));
-					}
+					}*/
 
 					// éclairage indirect
 					Vector omega_i = random_cos(N);
@@ -325,6 +331,11 @@ int main() {
 
 	Vector C(0, 0, 55);    // centre de la caméra
 	Scene scene;
+
+	scene.I = 5E9;    // Intensité de la source lumineuse
+	scene.L = Vector(-10, 20, 40);    // Position de la source lumineuse
+
+	Sphere Ssource(scene.L, 15, Vector(1, 1, 1));
 	Sphere S1(Vector(0, 0, 0), 10, Vector(1, 1, 1));
 	Sphere Ssol(Vector(0, -1000, 0), 990, Vector(1, 1, 1));
 	Sphere Smur1(Vector(-1000, 0, 0), 940, Vector(1, 0., 0.));
@@ -332,6 +343,7 @@ int main() {
 	Sphere Smur3(Vector(0, 0, -1000), 940, Vector(0., 0., 1));
 	Sphere Smur4(Vector(0, 0, 1000), 940, Vector(0., 1, 1));
 	Sphere Splafond(Vector(0, 1000, 0), 940, Vector(1, 0.5, 0.));
+	scene.objects.push_back(Ssource);
 	scene.objects.push_back(S1);
 	scene.objects.push_back(Ssol);
 	scene.objects.push_back(Smur1);
@@ -341,10 +353,8 @@ int main() {
 	scene.objects.push_back(Splafond);
 
 	double fov = 60 * M_PI /180;
-	scene.I = 5E9;    // Intensité de la source lumineuse
 
-	scene.L = Vector(-10, 20, 40);    // Position de la source lumineuse
-	int nbrays = 10;
+	int nbrays = 50;
 
 	std::vector<unsigned char> image(W*H * 3, 0);
 	// tableau dynamique que l'on remplit au fur et à mesure de la boucle
