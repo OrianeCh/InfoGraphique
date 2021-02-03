@@ -189,7 +189,7 @@ public:
 		return has_inter;
 	}
 
-	Vector get_color(const Ray& r, int rebond)
+	Vector get_color(const Ray& r, int rebond, bool lastDiffuse)
 	{
 	// renvoie la couleur du pixel
 		if (rebond > 5) return Vector(0.,0.,0.);
@@ -205,15 +205,19 @@ public:
 		
 		if (inter) 
 		{
-			if (objectid == 0){
-				return Vector(I,I,I) / (4*M_PI*M_PI*objects[0].R*objects[0].R);
+			if (objectid == 0 ){
+				if (rebond == 0 || !lastDiffuse) {
+					return Vector(I,I,I) / (4*M_PI*M_PI*objects[0].R*objects[0].R);
+				} else {
+					return Vector(0.,0.,0.);
+				}
 			}
 
 			if (mirror) 
 			{
 				Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
 				Ray reflectedRay(P + 0.001*N, reflectedDir);
-				return get_color(reflectedRay, rebond + 1);
+				return get_color(reflectedRay, rebond + 1, false);
 			} 
 			else 
 			{
@@ -237,11 +241,11 @@ public:
 					{
 						Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
 						Ray reflectedRay(P + 0.001*N, reflectedDir);
-						return get_color(reflectedRay, rebond + 1);
+						return get_color(reflectedRay, rebond + 1, false);
 					}
 					Vector Tn = - sqrt(rad)*N2;
 					Vector refractedDir = Tt + Tn;
-					return get_color(Ray(P - 0.001*N2, refractedDir), rebond + 1);	
+					return get_color(Ray(P - 0.001*N2, refractedDir), rebond + 1, false);	
 				}
 				else
 				// la sphère est diffuse 
@@ -262,10 +266,33 @@ public:
 						color = I / (4*M_PI*d*d) * albedo/M_PI *std::max(0., dot(N, PL/d));
 					}*/
 
+					// éclairage direct
+					Vector PL = L-P;
+					PL = PL.get_normalized();
+					Vector w = random_cos(-PL);
+					Vector xprime = w*objects[0].R + objects[0].O;
+					Vector Pxprime = xprime - P;
+					double d = sqrt(Pxprime.carreNorm());
+					Pxprime = Pxprime/d;
+
+					Vector shadowP, shadowN, shadowAlbedo;
+					double shadowt;
+					bool shadowMirror, shadowTransp;
+					Ray shadowRay(P + 0.001*N, Pxprime);
+					int objectsid;
+					bool ombre = intersect(shadowRay, shadowP, shadowN, shadowAlbedo, shadowMirror, shadowTransp, shadowt, objectsid);
+					if (ombre && shadowt < d - 0.002) {
+						color = Vector(0., 0., 0.);
+					} else {
+						double proba = std::max(0., dot(-PL, w)) / (M_PI*objects[0].R*objects[0].R);
+						double J = std::max(0., dot(w, -Pxprime)) / (d*d);
+						color = I / (4*M_PI*M_PI*objects[0].R*objects[0].R) * albedo/M_PI *std::max(0., dot(N, Pxprime)) * J/proba;
+					}
+
 					// éclairage indirect
 					Vector omega_i = random_cos(N);
 					Ray omega_iRay(P + 0.001*N, omega_i);
-					color += albedo*get_color(omega_iRay, rebond + 1);
+					color += albedo*get_color(omega_iRay, rebond + 1, true);
 
 				}	
 			}
@@ -335,8 +362,10 @@ int main() {
 	scene.I = 5E9;    // Intensité de la source lumineuse
 	scene.L = Vector(-10, 20, 40);    // Position de la source lumineuse
 
-	Sphere Ssource(scene.L, 15, Vector(1, 1, 1));
+	Sphere Ssource(scene.L, 1, Vector(1, 1, 1));
 	Sphere S1(Vector(0, 0, 0), 10, Vector(1, 1, 1));
+	Sphere S2(Vector(-10, 0, -20), 10, Vector(1, 1, 1));
+	Sphere S3(Vector(10, 0, 20), 10, Vector(1, 1, 1));
 	Sphere Ssol(Vector(0, -1000, 0), 990, Vector(1, 1, 1));
 	Sphere Smur1(Vector(-1000, 0, 0), 940, Vector(1, 0., 0.));
 	Sphere Smur2(Vector(1000, 0, 0), 940, Vector(0., 1, 0.));
@@ -345,6 +374,8 @@ int main() {
 	Sphere Splafond(Vector(0, 1000, 0), 940, Vector(1, 0.5, 0.));
 	scene.objects.push_back(Ssource);
 	scene.objects.push_back(S1);
+	scene.objects.push_back(S2);
+	scene.objects.push_back(S3);
 	scene.objects.push_back(Ssol);
 	scene.objects.push_back(Smur1);
 	scene.objects.push_back(Smur2);
@@ -354,7 +385,7 @@ int main() {
 
 	double fov = 60 * M_PI /180;
 
-	int nbrays = 50;
+	int nbrays = 100;
 
 	std::vector<unsigned char> image(W*H * 3, 0);
 	// tableau dynamique que l'on remplit au fur et à mesure de la boucle
@@ -379,12 +410,21 @@ int main() {
 				double x1 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
 				double x2 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
 
+				u1 = uniform(engine);
+				u2 = uniform(engine);
+				double x3 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
+				double x4 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
+
 				Vector u(j - W/2 + x2 + 0.5, i - H/2 + x1 + 0.5, - W / (2.*tan(fov/2)));    
 				// direction du rayon sortant par le pixel i,j de la caméra
-				u = u.get_normalized();
-				Ray r(C, u);
 
-				color += scene.get_color(r, 0);
+				Vector target = C + 55*u;
+				Vector Cprime = C + Vector(x3, x4, 0);
+				Vector uprime = (target - Cprime).get_normalized();
+
+				Ray r(Cprime, uprime);
+
+				color += scene.get_color(r, 0, false);
 			}
 			color = color / nbrays;
 			
