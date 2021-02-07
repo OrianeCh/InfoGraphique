@@ -205,10 +205,14 @@ public:
 		
 		if (inter) 
 		{
-			if (objectid == 0 ){
-				if (rebond == 0 || !lastDiffuse) {
+			if (objectid == 0 )
+			// Si la sphère est la source de lumière
+			{
+				if (rebond == 0 || !lastDiffuse) 
+				{
 					return Vector(I,I,I) / (4*M_PI*M_PI*objects[0].R*objects[0].R);
-				} else {
+				} else 
+				{
 					return Vector(0.,0.,0.);
 				}
 			}
@@ -249,7 +253,6 @@ public:
 				}
 				else
 				// la sphère est diffuse 
-				// éclairage direct
 				{
 					/*Vector PL = L-P;
 					double d = sqrt(PL.carreNorm());    
@@ -281,9 +284,11 @@ public:
 					Ray shadowRay(P + 0.001*N, Pxprime);
 					int objectsid;
 					bool ombre = intersect(shadowRay, shadowP, shadowN, shadowAlbedo, shadowMirror, shadowTransp, shadowt, objectsid);
-					if (ombre && shadowt < d - 0.002) {
+					if (ombre && shadowt < d - 0.002) 
+					{
 						color = Vector(0., 0., 0.);
-					} else {
+					} else 
+					{
 						double proba = std::max(0., dot(-PL, w)) / (M_PI*objects[0].R*objects[0].R);
 						double J = std::max(0., dot(w, -Pxprime)) / (d*d);
 						color = I / (4*M_PI*M_PI*objects[0].R*objects[0].R) * albedo/M_PI *std::max(0., dot(N, Pxprime)) * J/proba;
@@ -412,12 +417,13 @@ int main() {
 
 				u1 = uniform(engine);
 				u2 = uniform(engine);
-				double x3 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
-				double x4 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
+				double x3 = 1*cos(2*M_PI*u1)*sqrt(-2*log(u2));
+				double x4 = 1*cos(2*M_PI*u1)*sqrt(-2*log(u2));
 
 				Vector u(j - W/2 + x2 + 0.5, i - H/2 + x1 + 0.5, - W / (2.*tan(fov/2)));    
 				// direction du rayon sortant par le pixel i,j de la caméra
 
+				// Prise en compte de la profondeur de champs
 				Vector target = C + 55*u;
 				Vector Cprime = C + Vector(x3, x4, 0);
 				Vector uprime = (target - Cprime).get_normalized();
