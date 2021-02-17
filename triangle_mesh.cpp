@@ -130,7 +130,10 @@ public :
 
 class BoundingBox {
 public:
-	bool intersect(const Ray& r) {
+	bool intersect(const Ray& r)
+	// Regarde les paires d'intersection du rayon avec les paires de plans de la boïte englobante
+	// Regarde si l'intersection de ces intervalles est non-nulle
+	{
 		double t1x = (mini[0] - r.C[0])/r.u[0];
 		double t2x = (maxi[0] - r.C[0])/r.u[0];
 		double txMin = std::min(t1x, t2x);
@@ -176,7 +179,9 @@ public:
 		isTransparent = transparent;
 	};
 
-	void buildBB() {
+	void buildBB() 
+	// Construit la boïte englobante
+	{
 		bb.mini = Vector(1E9, 1E9, 1E9);
 		bb.maxi = Vector(-1E9, -1E9, -1E9);
 		for (int i = 0; i<vertices.size(); i++){
@@ -361,8 +366,9 @@ public:
 
 	}
 
-	bool intersect(const Ray& r, Vector& P, Vector& normale, double& t) {
-
+	bool intersect(const Ray& r, Vector& P, Vector& normale, double& t) 
+	// Regarde si le rayon intersecte le triangle
+	{
 		if (!bb.intersect(r)) return false;
 
 		t = 1E9;
@@ -666,7 +672,9 @@ int main() {
 	Sphere Splafond(Vector(0, 1000, 0), 940, Vector(1, 0.5, 0.));
 	TriangleMesh m(Vector(1., 1., 1.));
 	m.readOBJ("13463_Australian_Cattle_Dog_v3.obj");
-	for (int i=0; i < m.vertices.size(); i++){
+	for (int i=0; i < m.vertices.size(); i++)
+	// on remet le chien dans le bon sens et bien positionnée dans l'image
+	{
 		std::swap(m.vertices[i][1], m.vertices[i][2]);
 		m.vertices[i][2] = - m.vertices[i][2];
 		m.vertices[i][2] += 10;
@@ -691,7 +699,7 @@ int main() {
 
 	double fov = 60 * M_PI /180;
 
-	int nbrays = 2;
+	int nbrays = 10;
 
 	std::vector<unsigned char> image(W*H * 3, 0);
 	// tableau dynamique que l'on remplit au fur et à mesure de la boucle
