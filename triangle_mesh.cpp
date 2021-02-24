@@ -13,6 +13,7 @@ static std::default_random_engine engine(10) ; // random seed = 10
 static std::uniform_real_distribution<double> uniform(0, 1);
 
 #include <iostream>
+#include <list>
 
 #define M_PI 3.14159265
 
@@ -159,6 +160,13 @@ public:
 	Vector mini, maxi;
 };
 
+class Noeud {
+public :
+	Noeud *fg, *fd;
+	BoundingBox b;
+	int debut, fin;
+};
+
 class TriangleIndices {
 public:
 	TriangleIndices(int vtxi = -1, int vtxj = -1, int vtxk = -1, int ni = -1, int nj = -1, int nk = -1, int uvi = -1, int uvj = -1, int uvk = -1, int group = -1, bool added = false) : vtxi(vtxi), vtxj(vtxj), vtxk(vtxk), uvi(uvi), uvj(uvj), uvk(uvk), ni(ni), nj(nj), nk(nk), group(group) {
@@ -177,19 +185,63 @@ public:
 		this -> albedo = albedo;
 		isMirror = mirror;
 		isTransparent = transparent;
+		this->BVH = new Noeud;
 	};
 
-	void buildBB() 
+	BoundingBox buildBB(int debut, int fin) 
 	// Construit la boïte englobante
+	// debut et fin : indices de TRIANGLES
 	{
+		BoundingBox bb;
 		bb.mini = Vector(1E9, 1E9, 1E9);
 		bb.maxi = Vector(-1E9, -1E9, -1E9);
-		for (int i = 0; i<vertices.size(); i++){
+		for (int i = debut; i<fin; i++){
 			for (int j = 0; j<3; j++) {
-				bb.mini[j] = std::min(bb.mini[j], vertices[i][j]);
-				bb.maxi[j] = std::max(bb.maxi[j], vertices[i][j]);
+				bb.mini[j] = std::min(bb.mini[j], vertices[indices[i].vtxi][j]);
+				bb.maxi[j] = std::max(bb.maxi[j], vertices[indices[i].vtxi][j]);
+				bb.mini[j] = std::min(bb.mini[j], vertices[indices[i].vtxj][j]);
+				bb.maxi[j] = std::max(bb.maxi[j], vertices[indices[i].vtxj][j]);
+				bb.mini[j] = std::min(bb.mini[j], vertices[indices[i].vtxk][j]);
+				bb.maxi[j] = std::max(bb.maxi[j], vertices[indices[i].vtxk][j]);
 			}
 		}
+		return bb;
+	};
+
+	void buildBVH(Noeud* n, int debut, int fin) {
+		n->debut = debut;
+		n->fin = fin;
+		n->b = buildBB(n->debut, n->fin);
+		Vector diag = n->b.maxi - n->b.mini;
+		int dim;
+		if (diag[0] >= diag[1] && diag[0] >= diag[2]){
+			dim = 0;
+		} else {
+			if (diag[1] >= diag[0] && diag[1] >= diag[2]){
+				dim = 1;
+			} else {
+				if (diag[2] >= diag[0] && diag[2] >= diag[1]){
+					dim = 2;
+				}
+			}
+		}
+		double milieu = (n->b.mini[dim] + n->b.maxi[dim])*0.5;
+		int indice_pivot = n->debut;
+		for (int i = n->debut; i < n->fin; i++) {
+			double milieu_triangle = (vertices[indices[i].vtxi][dim] + vertices[indices[i].vtxj][dim] + vertices[indices[i].vtxk][dim])/3; 
+			if (milieu_triangle < milieu) {
+				std::swap(indices[i], indices[indice_pivot]);
+				indice_pivot ++;
+			}
+		}
+		n->fg = NULL;
+		n->fd = NULL;
+		if (indice_pivot == debut || indice_pivot == fin || (fin-debut < 5)) return;
+
+		n->fg = new Noeud;
+		n->fd = new Noeud;
+		buildBVH(n->fg, n->debut, indice_pivot);
+		buildBVH(n->fd, indice_pivot, n->fin);
 	}
 
 	void readOBJ(const char* obj) {
@@ -369,45 +421,70 @@ public:
 	bool intersect(const Ray& r, Vector& P, Vector& normale, double& t) 
 	// Regarde si le rayon intersecte le triangle
 	{
-		if (!bb.intersect(r)) return false;
+		
+		if (!BVH->b.intersect(r)) return false;
 
 		t = 1E9;
 		bool has_inter = false;
 
-		for (int i = 0; i < indices.size(); i++ ){
-			Vector &A = vertices[indices[i].vtxi];
-			Vector &B = vertices[indices[i].vtxj];
-			Vector &C = vertices[indices[i].vtxk];
+		std::list<Noeud*> l;
+		l.push_back(BVH);
+		while(!l.empty()) 
+		{
+			Noeud* c=l.front();
+			l.pop_front();
+			if (c->fg)
+			{
+				if (c->fg->b.intersect(r)) 
+				{
+				l.push_front(c->fg);
+				}
+				if (c->fd->b.intersect(r)) 
+				{
+				l.push_front(c->fd);
+				};
+			} else {
+				for (int i = c->debut; i < c->fin; i++)
+				{
+					Vector &A = vertices[indices[i].vtxi];
+					Vector &B = vertices[indices[i].vtxj];
+					Vector &C = vertices[indices[i].vtxk];
 
-			Vector e1 = B - A;
-			Vector e2 = C - A;
-			Vector N = cross(e1, e2);
-			Vector AO = r.C - A;
-			Vector AOu = cross(AO, r.u);
-			double invUN = 1 / dot(r.u, N);
-			double beta = -dot(e2, AOu)*invUN;
-			double gamma = dot(e1, AOu)*invUN;
-			double alpha = 1 - beta - gamma;
-			double localt = -dot(AO, N)*invUN;
-			if (beta >= 0 && gamma >= 0 && beta <= 1 && gamma <= 1 && alpha >= 0 && localt > 0) {
-				has_inter = true;
-				if (localt < t) {
-					t = localt;
-					normale = N.get_normalized();
-					P = r.C + t * r.u;
+					Vector e1 = B - A;
+					Vector e2 = C - A;
+					Vector N = cross(e1, e2);
+					Vector AO = r.C - A;
+					Vector AOu = cross(AO, r.u);
+					double invUN = 1 / dot(r.u, N);
+					double beta = -dot(e2, AOu)*invUN;
+					double gamma = dot(e1, AOu)*invUN;
+					double alpha = 1 - beta - gamma;
+					double localt = -dot(AO, N)*invUN;
+					if (beta >= 0 && gamma >= 0 && beta <= 1 && gamma <= 1 && alpha >= 0 && localt > 0) 
+					{
+						has_inter = true;
+						if (localt < t) 
+						{
+							t = localt;
+							normale = N.get_normalized();
+							P = r.C + t * r.u;
+						}
+					}
 				}
 			}
 
 		}
 		return has_inter;	
-	}
+}
 
 	std::vector<TriangleIndices> indices;
 	std::vector<Vector> vertices;
 	std::vector<Vector> normals;
 	std::vector<Vector> uvs;
 	std::vector<Vector> vertexcolors;
-	BoundingBox bb;
+	//BoundingBox bb;
+
+	Noeud* BVH;
 	
 };
 
@@ -648,8 +725,8 @@ void integrateCos4()
 }
 
 int main() {
-	int W = 256;
-	int H = 256;
+	int W = 512;
+	int H = 512;
 
 	/*integrateCos();
 	return 0;*/
@@ -672,18 +749,22 @@ int main() {
 	Sphere Splafond(Vector(0, 1000, 0), 940, Vector(1, 0.5, 0.));
 	TriangleMesh m(Vector(1., 1., 1.));
 	m.readOBJ("13463_Australian_Cattle_Dog_v3.obj");
+	double theta = 45./360.*2*M_PI;
 	for (int i=0; i < m.vertices.size(); i++)
 	// on remet le chien dans le bon sens et bien positionnée dans l'image
 	{
 		std::swap(m.vertices[i][1], m.vertices[i][2]);
 		m.vertices[i][2] = - m.vertices[i][2];
-		m.vertices[i][2] += 10;
+		m.vertices[i][2] += 5;
 		m.vertices[i][1] -= 10;
+		m.vertices[i][0] = cos(theta)*m.vertices[i][0] - sin(theta)*m.vertices[i][2];
+        m.vertices[i][2] = sin(theta)*m.vertices[i][0] + cos(theta)*m.vertices[i][2];
 	}
 	for (int i=0; i < m.normals.size(); i++){
 		std::swap(m.normals[i][1], m.normals[i][2]);
 	}
-	m.buildBB();
+	m.buildBVH(m.BVH, 0, m.indices.size());
+	//m.buildBB();
 
 	scene.objects.push_back(&Ssource);
 	//scene.objects.push_back(&S1);
@@ -699,7 +780,7 @@ int main() {
 
 	double fov = 60 * M_PI /180;
 
-	int nbrays = 10;
+	int nbrays = 100;
 
 	std::vector<unsigned char> image(W*H * 3, 0);
 	// tableau dynamique que l'on remplit au fur et à mesure de la boucle
