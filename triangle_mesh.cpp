@@ -19,7 +19,7 @@ static std::uniform_real_distribution<double> uniform(0, 1);
 
 class Vector {
 public :
-	explicit Vector(double x=0, double y=0, double z=0) 
+	explicit Vector(double x=0., double y=0., double z=0.) 
 	{
 		coords[0] = x;
 		coords[1] = y;
@@ -31,11 +31,11 @@ public :
 	{
 		return coords[0]*coords[0] + coords[1]*coords[1] + coords[2]*coords[2];
 	}
-	Vector operator+=(const Vector& a) 
+	Vector operator+=(const Vector& b) 
 	{
-		coords[0] += a[0];
-		coords[1] += a[1];
-		coords[2] += a[2];
+		coords[0] += b[0];
+		coords[1] += b[1];
+		coords[2] += b[2];
 		return *this;
 	}
 	Vector get_normalized()     // renvoie le vecteur normalisé
@@ -124,31 +124,26 @@ public:
 class Object {
 public :
 	Object() {};
-	virtual bool intersect(const Ray& r, Vector& P, Vector& normale, double& t) = 0;
+	virtual bool intersect(const Ray& r, Vector& P, Vector& normale, double& t, Vector &color) = 0;
 	Vector albedo;
 	bool isMirror, isTransparent;
 };
 
 class BoundingBox {
 public:
+	Vector mini, maxi;
 	bool intersect(const Ray& r)
 	// Regarde les paires d'intersection du rayon avec les paires de plans de la boïte englobante
 	// Regarde si l'intersection de ces intervalles est non-nulle
 	{
-		double t1x = (mini[0] - r.C[0])/r.u[0];
-		double t2x = (maxi[0] - r.C[0])/r.u[0];
-		double txMin = std::min(t1x, t2x);
-		double txMax = std::max(t1x, t2x);
+		double txMin = std::min((mini[0] - r.C[0])/r.u[0], (maxi[0] - r.C[0])/r.u[0]);
+		double txMax = std::max((mini[0] - r.C[0])/r.u[0], (maxi[0] - r.C[0])/r.u[0]);
 
-		double t1y = (mini[1] - r.C[1])/r.u[1];
-		double t2y = (maxi[1] - r.C[1])/r.u[1];
-		double tyMin = std::min(t1y, t2y);
-		double tyMax = std::max(t1y, t2y);
+		double tyMin = std::min((mini[1] - r.C[1])/r.u[1], (maxi[1] - r.C[1])/r.u[1]);
+		double tyMax = std::max((mini[1] - r.C[1])/r.u[1], (maxi[1] - r.C[1])/r.u[1]);
 
-		double t1z = (mini[2] - r.C[2])/r.u[2];
-		double t2z = (maxi[2] - r.C[2])/r.u[2];
-		double tzMin = std::min(t1z, t2z);
-		double tzMax = std::max(t1z, t2z);
+		double tzMin = std::min((mini[2] - r.C[2])/r.u[2], (maxi[2] - r.C[2])/r.u[2]);
+		double tzMax = std::max((mini[2] - r.C[2])/r.u[2], (maxi[2] - r.C[2])/r.u[2]);
 
 		double tMax = std::min(txMax, std::min(tyMax, tzMax));
 		double tMin = std::max(txMin, std::max(tyMin, tzMin));   //intersection ici
@@ -157,7 +152,6 @@ public:
 		return tMax > tMin;
 
 	}
-	Vector mini, maxi;
 };
 
 class Noeud {
@@ -195,8 +189,10 @@ public:
 		BoundingBox bb;
 		bb.mini = Vector(1E9, 1E9, 1E9);
 		bb.maxi = Vector(-1E9, -1E9, -1E9);
-		for (int i = debut; i<fin; i++){
-			for (int j = 0; j<3; j++) {
+		for (int i = debut; i<fin; i++)
+		{
+			for (int j = 0; j<3; j++) 
+			{
 				bb.mini[j] = std::min(bb.mini[j], vertices[indices[i].vtxi][j]);
 				bb.maxi[j] = std::max(bb.maxi[j], vertices[indices[i].vtxi][j]);
 				bb.mini[j] = std::min(bb.mini[j], vertices[indices[i].vtxj][j]);
@@ -213,23 +209,23 @@ public:
 		n->fin = fin;
 		n->b = buildBB(n->debut, n->fin);
 		Vector diag = n->b.maxi - n->b.mini;
-		int dim;
-		if (diag[0] >= diag[1] && diag[0] >= diag[2]){
+		int dim = 2;
+		if (diag[0] >= diag[1] && diag[0] >= diag[2])
+		{
 			dim = 0;
-		} else {
-			if (diag[1] >= diag[0] && diag[1] >= diag[2]){
-				dim = 1;
-			} else {
-				if (diag[2] >= diag[0] && diag[2] >= diag[1]){
-					dim = 2;
-				}
-			}
+		} 
+		if (diag[1] >= diag[0] && diag[1] >= diag[2])
+		{
+		 	dim = 1;
 		}
-		double milieu = (n->b.mini[dim] + n->b.maxi[dim])*0.5;
+		
+		double milieu = (n->b.mini[dim] + n->b.maxi[dim])/2;
 		int indice_pivot = n->debut;
-		for (int i = n->debut; i < n->fin; i++) {
+		for (int i = n->debut; i < n->fin; i++) 
+		{
 			double milieu_triangle = (vertices[indices[i].vtxi][dim] + vertices[indices[i].vtxj][dim] + vertices[indices[i].vtxk][dim])/3; 
-			if (milieu_triangle < milieu) {
+			if (milieu_triangle < milieu) 
+			{
 				std::swap(indices[i], indices[indice_pivot]);
 				indice_pivot ++;
 			}
@@ -418,7 +414,7 @@ public:
 
 	}
 
-	bool intersect(const Ray& r, Vector& P, Vector& normale, double& t) 
+	bool intersect(const Ray& r, Vector& P, Vector& normale, double& t, Vector &color) 
 	// Regarde si le rayon intersecte le triangle
 	{
 		
@@ -431,20 +427,20 @@ public:
 		l.push_back(BVH);
 		while(!l.empty()) 
 		{
-			Noeud* c=l.front();
+			Noeud* courant = l.front();
 			l.pop_front();
-			if (c->fg)
+			if (courant->fg)
 			{
-				if (c->fg->b.intersect(r)) 
+				if (courant->fg->b.intersect(r)) 
 				{
-				l.push_front(c->fg);
+				l.push_front(courant->fg);
 				}
-				if (c->fd->b.intersect(r)) 
+				if (courant->fd->b.intersect(r)) 
 				{
-				l.push_front(c->fd);
+				l.push_front(courant->fd);
 				};
 			} else {
-				for (int i = c->debut; i < c->fin; i++)
+				for (int i = courant->debut; i < courant->fin; i++)
 				{
 					Vector &A = vertices[indices[i].vtxi];
 					Vector &B = vertices[indices[i].vtxj];
@@ -466,23 +462,46 @@ public:
 						if (localt < t) 
 						{
 							t = localt;
-							normale = N.get_normalized();
+							//normale = N.get_normalized();
+							normale = alpha*normals[indices[i].ni] + beta*normals[indices[i].nj] + gamma*normals[indices[i].nk];
 							P = r.C + t * r.u;
+							Vector UV = alpha*uvs[indices[i].uvi] + beta*uvs[indices[i].uvj] + gamma*uvs[indices[i].uvk];
+							int H = Htex[indices[i].group];
+							int W = Wtex[indices[i].group];
+							UV = UV * Vector(W, H, 0);
+							int uvx = UV[0] + 0.5;
+							int uvy = UV[1] + 0.5;
+							uvx = uvx % W;
+							uvy = uvy % H;
+							if (uvx < 0) uvx += W;
+							if (uvy < 0) uvy += H;
+							uvy = H - uvy - 1;
+							color = Vector(std::pow(textures[indices[i].group][(uvy*W + uvx)*3] / 255., 2.2), std::pow(textures[indices[i].group][(uvy*W + uvx)*3 + 1]/ 255., 2.2), std::pow(textures[indices[i].group][(uvy*W + uvx)*3 + 2]/255.,2.2));
 						}
 					}
 				}
 			}
 
 		}
+		normale = normale.get_normalized();
 		return has_inter;	
-}
+	}
+
+	void loadTexture(const char* filename) {
+		int W, H, C;
+		unsigned char* texture = stbi_load(filename,&W, &H, &C, 3);
+		Wtex.push_back(W);
+		Htex.push_back(H);
+		textures.push_back(texture);
+	}
 
 	std::vector<TriangleIndices> indices;
 	std::vector<Vector> vertices;
 	std::vector<Vector> normals;
 	std::vector<Vector> uvs;
 	std::vector<Vector> vertexcolors;
-	//BoundingBox bb;
+	std::vector<unsigned char *> textures;
+	std::vector<int> Wtex, Htex;
 
 	Noeud* BVH;
 	
@@ -495,7 +514,7 @@ public:
 		this -> isMirror = isMirror;
 		this -> isTransparent = isTransparent;
 	};
-	bool intersect(const Ray& r, Vector& P, Vector& N, double& t)
+	bool intersect(const Ray& r, Vector& P, Vector& N, double& t, Vector &color)
 	// renvoie true si le rayon r et la sphere s'intersectent
 	// calcule le point d'intersection P et le vecteur normal N (normalisé) à la
 	// sphère passant par ce point.
@@ -520,6 +539,7 @@ public:
 
 		P = r.C + t * r.u;    // point d'intersection
 		N = (P - O).get_normalized();    // normale à la sphère passant par P
+		color = this->albedo;
 
 		return true;
 
@@ -540,14 +560,14 @@ public:
 		bool has_inter = false;
 		for (int i=0; i < objects.size(); i++)
 		{
-			Vector localP, localN;
+			Vector localP, localN, localAlbedo;
 			double localt;
-			if (objects[i]->intersect(r, localP, localN, localt) && localt<t)
+			if (objects[i]->intersect(r, localP, localN, localt, localAlbedo) && localt<t)
 			// regarde pour toutes les sphères de la scène, si elles intersectent le rayon r
 			{
 				t = localt;
 				has_inter = true;
-				albedo = objects[i]->albedo;
+				albedo = localAlbedo;
 				P = localP;
 				N = localN;
 				mirror = objects[i]->isMirror;
@@ -653,10 +673,8 @@ public:
 					Ray shadowRay(P + 0.001*N, Pxprime);
 					int objectsid;
 					bool ombre = intersect(shadowRay, shadowP, shadowN, shadowAlbedo, shadowMirror, shadowTransp, shadowt, objectsid);
-					if (ombre && shadowt < d - 0.002) 
-					{
-						color = Vector(0., 0., 0.);
-					} else 
+
+					if (!ombre || shadowt >= d - 0.002)
 					{
 						double carreR = carre(reinterpret_cast<Sphere*>(objects[0])->R);
 						double proba = std::max(0., dot(-PL, w)) / (M_PI*carreR);
@@ -725,8 +743,8 @@ void integrateCos4()
 }
 
 int main() {
-	int W = 512;
-	int H = 512;
+	int W = 256;
+	int H = 256;
 
 	/*integrateCos();
 	return 0;*/
@@ -734,12 +752,12 @@ int main() {
 	Vector C(0, 0, 55);    // centre de la caméra
 	Scene scene;
 
-	scene.I = 5E9;    // Intensité de la source lumineuse
+	scene.I = 2E9;    // Intensité de la source lumineuse
 	scene.L = Vector(-10, 20, 40);    // Position de la source lumineuse
 
 	Sphere Ssource(scene.L, 1, Vector(1, 1, 1));
 	Sphere S1(Vector(0, 0, 0), 10, Vector(1, 1, 1));
-	Sphere S2(Vector(-10, 0, -20), 10, Vector(1, 1, 1));
+	Sphere S2(Vector(20, 0, -20), 10, Vector(1, 1, 1));
 	Sphere S3(Vector(10, 0, 20), 10, Vector(1, 1, 1));
 	Sphere Ssol(Vector(0, -1000, 0), 990, Vector(1, 1, 1));
 	Sphere Smur1(Vector(-1000, 0, 0), 940, Vector(1, 0., 0.));
@@ -749,6 +767,7 @@ int main() {
 	Sphere Splafond(Vector(0, 1000, 0), 940, Vector(1, 0.5, 0.));
 	TriangleMesh m(Vector(1., 1., 1.));
 	m.readOBJ("13463_Australian_Cattle_Dog_v3.obj");
+	m.loadTexture("Australian_Cattle_Dog_dif.jpg");
 	double theta = 45./360.*2*M_PI;
 	for (int i=0; i < m.vertices.size(); i++)
 	// on remet le chien dans le bon sens et bien positionnée dans l'image
@@ -757,18 +776,24 @@ int main() {
 		m.vertices[i][2] = - m.vertices[i][2];
 		m.vertices[i][2] += 5;
 		m.vertices[i][1] -= 10;
+		double old_vertices = m.vertices[i][0];
 		m.vertices[i][0] = cos(theta)*m.vertices[i][0] - sin(theta)*m.vertices[i][2];
-        m.vertices[i][2] = sin(theta)*m.vertices[i][0] + cos(theta)*m.vertices[i][2];
+        m.vertices[i][2] = sin(theta)*old_vertices + cos(theta)*m.vertices[i][2];
+		
 	}
 	for (int i=0; i < m.normals.size(); i++){
 		std::swap(m.normals[i][1], m.normals[i][2]);
+		m.normals[i][2] = - m.normals[i][2];
+		double old_normals = m.normals[i][0];
+		m.normals[i][0] = cos(theta)*m.normals[i][0] - sin(theta)*m.normals[i][2];
+        m.normals[i][2] = sin(theta)*old_normals + cos(theta)*m.normals[i][2];
+
 	}
 	m.buildBVH(m.BVH, 0, m.indices.size());
-	//m.buildBB();
 
 	scene.objects.push_back(&Ssource);
 	//scene.objects.push_back(&S1);
-	//scene.objects.push_back(&S2);
+	scene.objects.push_back(&S2);
 	//scene.objects.push_back(&S3);
 	scene.objects.push_back(&m);
 	scene.objects.push_back(&Ssol);
@@ -781,6 +806,11 @@ int main() {
 	double fov = 60 * M_PI /180;
 
 	int nbrays = 100;
+
+	//Vector up(0., cos(20*M_PI/180), sin(20*M_PI/180));
+	//Vector right(1, 0, 0);
+
+	//Vector viewDirection = cross(up, right);
 
 	std::vector<unsigned char> image(W*H * 3, 0);
 	// tableau dynamique que l'on remplit au fur et à mesure de la boucle
@@ -798,8 +828,8 @@ int main() {
 			Ray r(C, u);
 
 			Vector color(0., 0., 0.);
-			for (int k= 0; k<nbrays; k++) {
-				
+			for (int k= 0; k<nbrays; k++) 
+			{
 				double u1 = uniform(engine);
 				double u2 = uniform(engine);
 				double x1 = 0.25*cos(2*M_PI*u1)*sqrt(-2*log(u2));
@@ -812,6 +842,9 @@ int main() {
 
 				Vector u(j - W/2 + x2 + 0.5, i - H/2 + x1 + 0.5, - W / (2.*tan(fov/2)));    
 				// direction du rayon sortant par le pixel i,j de la caméra
+
+				u = u.get_normalized();
+				//u = u[0] * right + u[1] * up + viewDirection;
 
 				// Prise en compte de la profondeur de champs
 				Vector target = C + 55*u;
