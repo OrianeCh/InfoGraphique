@@ -20,31 +20,23 @@ class Vector {
 public :
 	explicit Vector(double x=0, double y=0, double z=0) 
 	{
-		coords[0] = x;
-		coords[1] = y;
-		coords[2] = z; 
+		coordinates[0] = x;
+		coordinates[1] = y;
+		coordinates[2] = z; 
 	};
-	double operator[](int i) const { return coords[i]; };
-	double &operator[](int i) { return coords[i]; };
-	double carreNorm() const    // renvoie le carré de la norme du vecteur
-	{
-		return coords[0]*coords[0] + coords[1]*coords[1] + coords[2]*coords[2];
-	}
-	Vector operator+=(const Vector& a) 
-	{
-		coords[0] += a[0];
-		coords[1] += a[1];
-		coords[2] += a[2];
-		return *this;
-	}
-	Vector get_normalized()     // renvoie le vecteur normalisé
-	{
-		double n = sqrt(carreNorm());
-		return Vector(coords[0] / n, coords[1] / n, coords[2] / n);
-	}
+	double operator[](int i) const { return coordinates[i]; };
+	double &operator[](int i) { return coordinates[i]; };
 private:
-	double coords[3];
+	double coordinates[3];
 };
+Vector operator+=(Vector& a, const Vector& b)
+{
+	return Vector(a[0] += b[0], a[1] += b[1], a[2] += b[2]);
+}
+Vector operator+=(const Vector& a, Vector& b)
+{
+	return Vector(b[0] += a[0], b[1] += a[1], b[2] += a[2]);
+}
 Vector operator+(const Vector& a, const Vector& b) 
 {
 	return Vector(a[0] + b[0], a[1] + b[1], a[2] + b[2]);
@@ -77,19 +69,32 @@ Vector operator-(const Vector& a)
 {
 	return Vector(- a[0], - a[1], - a[2]);
 }
-double dot(const Vector& a, const Vector& b) 
+double scalar(const Vector& a, const Vector& b) 
 {
 	return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 }
-Vector cross(const Vector& a, const Vector& b)
+Vector vectorial(const Vector& a, const Vector& b)
 {
 	return Vector(a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]);
 }
-double carre(double x) 
+double square(double x) 
 {
 	return x * x;
 }
-Vector random_cos(const Vector& N)
+double carreNorm(const Vector& a)    // renvoie le carré de la norme du vecteur
+{
+	return a[0]*a[0] + a[1]*a[1] + a[2]*a[2];
+}
+double Norm(const Vector& a)
+{
+	return sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+}
+Vector normalized(const Vector& a)     // renvoie le vecteur normalisé
+{
+	double n = sqrt(carreNorm(a));
+	return Vector(a[0] / n, a[1] / n, a[2] / n);
+}
+Vector random_dir(const Vector& N)
 // Permet de générer un vecteur aléatoire pour la méthode de Monte Carlo
 {
 	double u1 = uniform(engine);
@@ -97,19 +102,17 @@ Vector random_cos(const Vector& N)
 	double x = cos(2*M_PI*u1)*sqrt(1-u2);
 	double y = sin(2*M_PI*u1)*sqrt(1-u2);
 	double z = sqrt(u2);
-	Vector T1;
+	Vector T1 = Vector(N[1], -N[0], 0);
 	if (N[0] < N[1] && N[0] < N[2]) 
 	{
 		T1 = Vector(0, N[2], -N[1]);
-	} else {
-		if (N[1] < N[0] && N[1] < N[2]) {
-			T1 = Vector(N[2], 0, -N[0]);
-		} else {
-			T1 = Vector(N[1], -N[0], 0);
-		}
-	}
-	T1 = T1.get_normalized();
-	Vector T2 = cross(N, T1);
+	} 
+	if (N[1] < N[0] && N[1] < N[2]) 
+	{
+		T1 = Vector(N[2], 0, -N[0]);
+	} 
+	T1 = normalized(T1);
+	Vector T2 = vectorial(N, T1);
 	return z*N + x*T1 + y*T2;
 }
 
@@ -122,7 +125,7 @@ public:
 
 class Sphere {
 public:
-	explicit Sphere(const Vector& O, double R, const Vector& albedo, bool isMirror = false, bool isTransparent = false) : O(O), R(R), albedo(albedo), isMirror(isMirror), isTransparent(isTransparent) {
+	explicit Sphere(const Vector& O, double R, const Vector& albedo, bool mirror = false, bool transparent = false) : O(O), R(R), albedo(albedo), mirror(mirror), transparent(transparent) {
 	};
 	bool intersect(const Ray& r, Vector& P, Vector& N, double& t)
 	// renvoie true si le rayon r et la sphere s'intersectent
@@ -130,31 +133,30 @@ public:
 	// sphère passant par ce point.
 	{
 		double a = 1;    // on suppose que la norme du vecteur u est 1
-		double b = 2*dot(r.u, r.C - O);
-		double c = (r.C - O).carreNorm() - R*R;
+		double b = 2*scalar(r.u, r.C - O);
+		double c = carreNorm(r.C - O) - R*R;
 		double delta = b*b - 4*a*c;
 
 		if (delta < 0) return false;    // on cherche une solution réelle
 
-		double sqDelta = sqrt(delta);
+		double t1 = (- b - sqrt(delta)) / (2 * a);
+		double t2 = (- b + sqrt(delta)) / (2 * a);
 
-		double t2 = (- b + sqDelta) / (2 * a);
 		if (t2 < 0) return false;    // on cherche une solution positive
 
-		double t1 = (- b - sqDelta) / (2 * a);
 		if (t1 > 0)
 			t = t1;    // on garde la solution la plus petite
 		else 
 			t = t2;
 
 		P = r.C + t * r.u;    // point d'intersection
-		N = (P - O).get_normalized();    // normale à la sphère passant par P
+		N = normalized(P-O);    // normale à la sphère passant par P
 
 		return true;
 
 	};
 	Vector albedo;
-	bool isMirror, isTransparent;
+	bool mirror, transparent;
 	Vector O;
 	double R;
 };
@@ -162,13 +164,13 @@ public:
 class Scene {
 public:
 	Scene() {};
-	bool intersect(const Ray& r, Vector& P, Vector& N, Vector& albedo, bool &mirror, bool &transparent, double &t, int &objectid)
+	bool intersect(const Ray& r, Vector& P, Vector& N, Vector& albedo, bool& mir, bool& transp, double& t, int& objectid)
 	// return true si il y a intersection avec au moins une sphere de la scene
 	// donne le point P et la normale N de l'intersection la plus proche de l’origine du rayon 
 	// parmi les intersections avec toutes les sphères de la scène
 	{
-		t = 1E10;
-		bool has_inter = false;
+		t = 1E5;
+		bool intersection = false;
 		for (int i=0; i < objects.size(); i++)
 		{
 			Vector localP, localN;
@@ -176,17 +178,18 @@ public:
 			if (objects[i].intersect(r, localP, localN, localt) && localt<t)
 			// regarde pour toutes les sphères de la scène, si elles intersectent le rayon r
 			{
-				t = localt;
-				has_inter = true;
-				albedo = objects[i].albedo;
+				
+				intersection = true;
 				P = localP;
 				N = localN;
-				mirror = objects[i].isMirror;
-				transparent = objects[i].isTransparent;
+				albedo = objects[i].albedo;
+				mir = objects[i].mirror;
+				transp = objects[i].transparent;
+				t = localt;
 				objectid = i;
 			}
 		}
-		return has_inter;
+		return intersection;
 	}
 
 	Vector get_color(const Ray& r, int rebond, bool lastDiffuse)
@@ -197,13 +200,14 @@ public:
 		// le rayon soit réfléchi à l'infini entre 2 sphères
 
 		Vector P, N, albedo;
+		bool mir, transp;
 		double t;
-		bool mirror, transparent;
 		int objectid;
-		bool inter = intersect(r, P, N, albedo, mirror, transparent, t, objectid);
-		Vector color(0, 0, 0);    // noir 
+		bool intersection = intersect(r, P, N, albedo, mir, transp, t, objectid);
+		Vector color(0., 0., 0.);    // noir 
+		Ray reflectedRay(P + 0.001*N, r.u - 2*scalar(r.u, N)*N);
 		
-		if (inter) 
+		if (intersection) 
 		{
 			if (objectid == 0 )
 			// Si la sphère est la source de lumière
@@ -213,91 +217,68 @@ public:
 					return Vector(I,I,I) / (4*M_PI*M_PI*objects[0].R*objects[0].R);
 				} else 
 				{
-					return Vector(0.,0.,0.);
+					return color;
 				}
 			}
 
-			if (mirror) 
+			if (mir) 
 			{
-				Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
-				Ray reflectedRay(P + 0.001*N, reflectedDir);
 				return get_color(reflectedRay, rebond + 1, false);
 			} 
 			else 
 			{
-				if (transparent) 
+				if (transp) 
 				{
-					Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
-					Ray reflectedRay(P + 0.001*N, reflectedDir);
-					double n1 = 1, n2 = 1.4;
-					Vector N2 = N;
-					if (dot(r.u, N) > 0) 
+					double n1 = 1;
+					double n2 = 1.4;
+					Vector Norigine = N;
+					if (scalar(r.u, N) > 0) 
 					// si la normale ne pointe pas vers l'origine du rayon
 					// on inverse les indices des milieux et on change la normale de direction
 					{
 						std::swap(n1, n2);
-						N2 = -N;
+						Norigine = -N;
 					}
-					Vector Tt = n1 / n2 * (r.u - dot(r.u, N2)*N2);
-					double rad = 1 - carre(n1/n2) * (1 - carre(dot(r.u, N2)));
-					if (rad < 0) 
+					double sousRacine = 1 - square(n1/n2) * (1 - square(scalar(r.u, Norigine)));
+					if (sousRacine < 0) 
 					// Si le terme sous la racine est négatif, le rayon est réfléchi
 					{
-						Vector reflectedDir = r.u - 2*dot(r.u, N)*N;
-						Ray reflectedRay(P + 0.001*N, reflectedDir);
 						return get_color(reflectedRay, rebond + 1, false);
 					}
-					Vector Tn = - sqrt(rad)*N2;
-					Vector refractedDir = Tt + Tn;
-					return get_color(Ray(P - 0.001*N2, refractedDir), rebond + 1, false);	
+					Vector Tt = n1 / n2 * (r.u - scalar(r.u, Norigine)*Norigine);
+					Vector Tn = - sqrt(sousRacine)*Norigine;
+					return get_color(Ray(P - 0.001*Norigine, Tt + Tn), rebond + 1, false);	
 				}
 				else
 				// la sphère est diffuse 
 				{
-					/*Vector PL = L-P;
-					double d = sqrt(PL.carreNorm());    
-					// distance entre le point d'intersection et la lumière
-					Vector shadowP, shadowN, shadowAlbedo;
-					double shadowt;
-					bool shadowMirror, shadowTransp;
-					Ray shadowRay(P + 0.001*N, PL/d);
-					int objectsid;
-					bool ombre = intersect(shadowRay, shadowP, shadowN, shadowAlbedo, shadowMirror, shadowTransp, shadowt, objectsid);
-					if (ombre && shadowt < d) {
-						color = Vector(0., 0., 0.);
-					} else {
-						color = I / (4*M_PI*d*d) * albedo/M_PI *std::max(0., dot(N, PL/d));
-					}*/
-
 					// éclairage direct
 					Vector PL = L-P;
-					PL = PL.get_normalized();
-					Vector w = random_cos(-PL);
+					PL = normalized(PL);
+					Vector w = random_dir(-PL);
 					Vector xprime = w*objects[0].R + objects[0].O;
 					Vector Pxprime = xprime - P;
-					double d = sqrt(Pxprime.carreNorm());
-					Pxprime = Pxprime/d;
+					double norme = Norm(Pxprime);
+					Pxprime = Pxprime/norme;
 
-					Vector shadowP, shadowN, shadowAlbedo;
-					double shadowt;
-					bool shadowMirror, shadowTransp;
-					Ray shadowRay(P + 0.001*N, Pxprime);
+					Vector ombreP, ombreN, ombre_albedo;
+					double ombret;
+					bool ombre_mir, ombre_transp;
+					Ray ombrer(P + 0.001*N, Pxprime);
 					int objectsid;
-					bool ombre = intersect(shadowRay, shadowP, shadowN, shadowAlbedo, shadowMirror, shadowTransp, shadowt, objectsid);
-					if (ombre && shadowt < d - 0.002) 
+					bool ombre = intersect(ombrer, ombreP, ombreN, ombre_albedo, ombre_mir, ombre_transp, ombret, objectsid);
+					
+					if (!ombre || ombret >= norme - 0.002)  
 					{
-						color = Vector(0., 0., 0.);
-					} else 
-					{
-						double proba = std::max(0., dot(-PL, w)) / (M_PI*objects[0].R*objects[0].R);
-						double J = std::max(0., dot(w, -Pxprime)) / (d*d);
-						color = I / (4*M_PI*M_PI*objects[0].R*objects[0].R) * albedo/M_PI *std::max(0., dot(N, Pxprime)) * J/proba;
+						double proba = std::max(0., scalar(-PL, w)) / (M_PI*objects[0].R*objects[0].R);
+						double J = std::max(0., scalar(w, -Pxprime)) / (norme*norme);
+						color = I / (4*M_PI*M_PI*objects[0].R*objects[0].R) * albedo/M_PI *std::max(0., scalar(N, Pxprime)) * J/proba;
 					}
 
 					// éclairage indirect
-					Vector omega_i = random_cos(N);
-					Ray omega_iRay(P + 0.001*N, omega_i);
-					color += albedo*get_color(omega_iRay, rebond + 1, true);
+					Vector omega_i = random_dir(N);
+					Ray omega_ir(P + 0.001*N, omega_i);
+					color += albedo*get_color(omega_ir, rebond + 1, true);
 
 				}	
 			}
@@ -355,13 +336,13 @@ void integrateCos4()
 }
 
 int main() {
-	int W = 512;
-	int H = 512;
+	int W = 256;
+	int H = 256;
 
 	/*integrateCos();
 	return 0;*/
 
-	Vector C(0, 0, 55);    // centre de la caméra
+	Vector C(0., 0., 55.);    // centre de la caméra
 	Scene scene;
 
 	scene.I = 5E9;    // Intensité de la source lumineuse
@@ -379,8 +360,8 @@ int main() {
 	Sphere Splafond(Vector(0, 1000, 0), 940, Vector(1, 0.5, 0.));
 	scene.objects.push_back(Ssource);
 	scene.objects.push_back(S1);
-	scene.objects.push_back(S2);
-	scene.objects.push_back(S3);
+	//scene.objects.push_back(S2);
+	//scene.objects.push_back(S3);
 	scene.objects.push_back(Ssol);
 	scene.objects.push_back(Smur1);
 	scene.objects.push_back(Smur2);
@@ -402,12 +383,8 @@ int main() {
 	{
 		for (int j = 0; j < W; j++) 
 		{
-			Vector u(j - W/2, i - H/2, - W / (2.*tan(fov/2)));    
-			// direction du rayon sortant par le pixel i,j de la caméra
-			u = u.get_normalized();
-			Ray r(C, u);
 
-			Vector color(0., 0., 0.);
+			Vector color;
 			for (int k= 0; k<nbrays; k++) {
 				
 				double u1 = uniform(engine);
@@ -423,14 +400,16 @@ int main() {
 				Vector u(j - W/2 + x2 + 0.5, i - H/2 + x1 + 0.5, - W / (2.*tan(fov/2)));    
 				// direction du rayon sortant par le pixel i,j de la caméra
 
+				u = normalized(u);
+
 				// Prise en compte de la profondeur de champs
-				Vector target = C + 55*u;
+				Vector P = C + 55*u;
 				Vector Cprime = C + Vector(x3, x4, 0);
-				Vector uprime = (target - Cprime).get_normalized();
+				Vector uprime = normalized(P - Cprime);
 
-				Ray r(Cprime, uprime);
+				Ray rprime(Cprime, uprime);
 
-				color += scene.get_color(r, 0, false);
+				color += scene.get_color(rprime, 0, false);
 			}
 			color = color / nbrays;
 			
